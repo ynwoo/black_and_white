@@ -1,6 +1,7 @@
 import discord, asyncio, os
 from utils import get_current_game, is_open
 import datetime
+import time
 from discord.ext import commands
 from active_games import active_games
 from game_room import Game_room
@@ -66,7 +67,6 @@ async def 시작(ctx):
                           description="흑과백은 숫자 타일을 제시해 높은 숫자를 낸 플레이어가 승점을 획득하는 게임입니다. 상대방의 심리를 파악하세요!") 
     embed.add_field(
         name="참가 방법", value="게임에 참가하고 싶다면 !참가를 입력해주세요.", inline=False)
-    await bot.change_presence(activity=discord.Game(name=f"{len(active_games)}개 게임"))
     await ctx.send(embed=embed)
 
 @bot.command()  
@@ -116,55 +116,12 @@ async def 리셋(ctx):
         await ctx.send("시작한 게임이 존재하지 않습니다.", reference=ctx.message)
         return
     del active_games[ctx.channel.id]
-    await bot.change_presence(activity=discord.Game(name=f"{len(active_games)}개 게임"))
     await ctx.send("진행하는 게임을 중단합니다.", reference=ctx.message)
     print("reset")
 
 @bot.event
 async def on_ready():
     await bot.user.edit(avatar=image)
-
-    # print 예제
-    discord_py="discord.py"
-    dis="discord"
-    api="API"
-    namuwiki="나무위키"
-    print(f"{discord_py}는 {dis}의 {api}입니다. {discord_py} 문서는 {namuwiki}에서 만들어졌습니다.")
-
-# event 추가 예정
-# @bot.event
-# async def on_message(message):
-#     if message.author.bot:
-#         return
-#     if message.channel.id not in active_games:
-#         return
-    
-#     room_info = active_games[message.channel.id]['game_room']
-#     if not room_info.start:
-#         return
-
-#     if message.author not in room_info.members:
-#         return
-
-
-
-
-
-# async 예제
-# 지울 예정
-@bot.command(aliases=['안녕', 'hi', '안녕하세요'])
-async def hello(ctx):
-    await ctx.send(f'{ctx.author.mention}님 안녕하세요!')
-
-@bot.command(name="반응")
-async def get_reaction_and_react(ctx):
-    msg = await ctx.send("1, 2, 3 반응 중 2 반응을 달아주세요.")
-    reaction_list = ['1️⃣', '2️⃣', '3️⃣']
-    for r in reaction_list:
-        await msg.add_reaction(r)
-    def check(reaction, user):
-        return str(reaction) in reaction_list and user == ctx.author and reaction.message.id == msg.id
-
 
 @bot.event
 async def on_raw_reaction_add(payload):
@@ -197,7 +154,6 @@ async def on_raw_reaction_add(payload):
     for member in room_info.members:
         if payload.user_id == member.id:
             if tile_num in game_status.numeric_tiles[member]:
-                print(tile_num)
                 game_status.game_results[member].append(tile_num)
                 game_status.numeric_tiles[member].remove(tile_num)
 
@@ -224,8 +180,10 @@ async def on_raw_reaction_add(payload):
                 else:
                     embed.add_field(name=f"{game_status.second_player.name}님이 제시한 타일의 색은 {tile_info}입니다.", 
                                     value=f"{game_status.round}라운드 결과 발표하겠습니다.", inline=False)
+                    
+                    await room_info.main_channel.send(embed=embed)
                     # 5초 쉬고
-                    # time.sleep(5)
+                    time.sleep(3)
                     # 결과 발표
 
                     a = game_status.game_results[game_status.first_player][game_status.round-1]
@@ -240,47 +198,23 @@ async def on_raw_reaction_add(payload):
                         round_winner = None
 
                     if round_winner:
-                        embed.add_field(name=f"{round_winner.name} 승", 
-                                    value=f"{round_winner.name}님의 승리입니다.", inline=False)
+                        embed = discord.Embed(title=f"{round_winner.name} 승\n{round_winner.name}님의 승리입니다.")
                         game_status.scores[round_winner]+=1
                         game_status.first_player = round_winner
                         game_status.second_player = round_loser
                     else:
-                        embed.add_field(name=f"무승부입니다.", 
-                                    value=f"무승부로 라운드가 끝났기 때문에 다음 라운드에서 {game_status.first_player.name}님이 선 플레이어입니다", inline=False)
+                        embed = discord.Embed(title=f"무승부입니다.\n무승부로 라운드가 끝났기 때문에 다음 라운드에서 {game_status.first_player.name}님이 선 플레이어입니다")
 
                     game_status.turn *= -1
                     await room_info.main_channel.send(embed=embed)
                     asyncio.ensure_future(start_round(current_game))
                     
-                # embed = discord.Embed(title=f"선플레이어이신 {game_status.first_player.name}님이 제시한 타일의 색은 {tile_info}입니다.", 
-                # description=f"이어서 {game_status.second_player.name}님 께서는 타일을 제시해주시기 바랍니다.", color=tile_color)
             else:
                 embed = discord.Embed(title=f"{member.name}님이 가지고 있지 않은 타일입니다.",
                           description=f"""현재 가지고 있는 타일을 제시해주세요.""")
                                      
                 await member.send(embed=embed)
                 break
-
-
-    # if str(payload.emoji) in room_info.emojis and room_info.emojis[str(payload.emoji)]:
-    #     await judge_merlin(payload, current_game) if game_status.assassination else await add_teammate(payload, room_info.emojis[str(payload.emoji)], current_game)          
-    # elif str(payload.emoji) in ["👍","👎"]:
-    #     asyncio.ensure_future(vote(current_game, current_round, payload, lock_for_vote))
-    # elif str(payload.emoji) in ["⭕", "❌"]:
-    #     asyncio.ensure_future(try_mission(payload, current_round['team'], current_game, lock_for_mission))
-
-# @bot.event
-# async def on_raw_reaction_add(payload):
-#     channel = await bot.fetch_channel(payload.channel_id)
-#     message = await channel.fetch_message(payload.message_id)
-#     await message.clear_reactions()
-
-# @bot.event
-# async def on_message(message):
-#     if "안녕" in message.content:
-#         await message.delete()
-#         await message.channel.send(f"{message.author.mention} 님이 비속어를 사용하였습니다.")
 
 @bot.event
 async def on_command_error(ctx, error):
